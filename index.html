@@ -1,0 +1,2592 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Smart Delivery Route Optimizer</title>
+    <!-- Font Awesome -->
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0-beta3/css/all.min.css" />
+    <!-- Leaflet CSS -->
+    <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" integrity="sha256-p4NxAoJBhIIN+hmNHrzRCf9tD/miZyoHS5obTRR9BMY=" crossorigin=""/>
+    <!-- Leaflet JS -->
+    <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js" integrity="sha256-20nQCchB9co0qIjJZRGuk2/Z9VM+kNiyxNV1lvTlZBo=" crossorigin=""></script>
+    <!-- SheetJS for Excel export -->
+    <script src="https://cdn.sheetjs.com/xlsx-0.20.3/package/dist/xlsx.full.min.js"></script>
+    <style>
+        /* ============================================================
+           RESET & BASE
+           ============================================================ */
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+            font-family: 'Inter', system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+        }
+
+        body {
+            background: #f0f4f8;
+            min-height: 100vh;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            padding: 24px;
+        }
+
+        /* ============================================================
+           MAIN APP CONTAINER
+           ============================================================ */
+        .app {
+            max-width: 1440px;
+            width: 100%;
+            background: #ffffff;
+            border-radius: 32px;
+            box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.15);
+            overflow: hidden;
+            transition: all 0.3s ease;
+        }
+
+        /* ============================================================
+           HEADER
+           ============================================================ */
+        .header {
+            padding: 28px 36px;
+            background: linear-gradient(135deg, #0f172a 0%, #1e293b 100%);
+            color: white;
+            position: relative;
+            overflow: hidden;
+        }
+        .header::after {
+            content: '';
+            position: absolute;
+            top: -50%;
+            right: -20%;
+            width: 300px;
+            height: 300px;
+            background: radial-gradient(circle, rgba(96, 165, 250, 0.1) 0%, transparent 70%);
+            border-radius: 50%;
+        }
+        .header h1 {
+            font-weight: 700;
+            font-size: 2rem;
+            letter-spacing: -0.02em;
+            display: flex;
+            align-items: center;
+            gap: 14px;
+            position: relative;
+            z-index: 1;
+        }
+        .header h1 i {
+            color: #60a5fa;
+            font-size: 2.2rem;
+            filter: drop-shadow(0 0 10px rgba(96, 165, 250, 0.3));
+        }
+        .header-controls {
+            display: flex;
+            align-items: center;
+            gap: 16px;
+            margin-top: 12px;
+            flex-wrap: wrap;
+            position: relative;
+            z-index: 1;
+        }
+        .header-controls label {
+            font-size: 0.85rem;
+            font-weight: 500;
+            color: #94a3b8;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+        .header-controls select {
+            background: rgba(255, 255, 255, 0.1);
+            border: 1px solid rgba(255, 255, 255, 0.2);
+            color: white;
+            padding: 6px 12px;
+            border-radius: 30px;
+            font-size: 0.85rem;
+            cursor: pointer;
+            transition: 0.2s;
+            backdrop-filter: blur(10px);
+        }
+        .header-controls select:hover {
+            background: rgba(255, 255, 255, 0.2);
+        }
+        .header-controls select option {
+            background: #1e293b;
+            color: white;
+        }
+
+        /* ============================================================
+           TWO-COLUMN LAYOUT
+           ============================================================ */
+        .dashboard {
+            display: flex;
+            flex-wrap: wrap;
+            background: #f8fafc;
+        }
+
+        /* ============================================================
+           LEFT SIDE - STOPS PANEL
+           ============================================================ */
+        .stops-panel {
+            flex: 1 1 400px;
+            padding: 32px 28px;
+            background: #ffffff;
+            border-right: 1px solid #e9edf4;
+        }
+        .stops-panel h2 {
+            font-size: 1.4rem;
+            font-weight: 600;
+            color: #0f172a;
+            margin-bottom: 24px;
+            letter-spacing: -0.01em;
+            display: flex;
+            align-items: center;
+            gap: 12px;
+        }
+        .stops-panel h2 i {
+            color: #3b82f6;
+        }
+
+        .stops-list {
+            display: flex;
+            flex-direction: column;
+            gap: 12px;
+            margin-bottom: 28px;
+            max-height: 420px;
+            overflow-y: auto;
+            padding-right: 6px;
+            transition: all 0.3s ease;
+        }
+        .stops-list::-webkit-scrollbar {
+            width: 6px;
+        }
+        .stops-list::-webkit-scrollbar-track {
+            background: #f1f5f9;
+            border-radius: 10px;
+        }
+        .stops-list::-webkit-scrollbar-thumb {
+            background: #cbd5e1;
+            border-radius: 10px;
+            transition: 0.2s;
+        }
+        .stops-list::-webkit-scrollbar-thumb:hover {
+            background: #94a3b8;
+        }
+
+        .stop-card {
+            background: #f8fafc;
+            border-radius: 16px;
+            padding: 16px 18px;
+            border: 1px solid #eef2f8;
+            transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+            display: flex;
+            flex-wrap: wrap;
+            align-items: center;
+            justify-content: space-between;
+            animation: slideIn 0.3s ease forwards;
+            position: relative;
+        }
+        .stop-card:hover {
+            background: #ffffff;
+            border-color: #d1d9e8;
+            box-shadow: 0 8px 20px -8px rgba(0, 20, 50, 0.08);
+            transform: translateY(-2px);
+        }
+        .stop-card.optimized {
+            border-left: 4px solid #3b82f6;
+            background: #f0f7ff;
+        }
+        .stop-card.completed {
+            border-left: 4px solid #10b981;
+            background: #f0fdf4;
+            opacity: 0.85;
+        }
+        .stop-card.removing {
+            animation: slideOut 0.3s ease forwards;
+        }
+
+        .stop-info {
+            display: flex;
+            flex-direction: column;
+            gap: 6px;
+            flex: 1;
+        }
+        .stop-name {
+            font-weight: 600;
+            font-size: 1.05rem;
+            color: #0f172a;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+        .stop-order {
+            font-size: 0.7rem;
+            font-weight: 700;
+            color: #3b82f6;
+            background: #dbeafe;
+            padding: 2px 10px;
+            border-radius: 12px;
+            display: inline-block;
+        }
+        .stop-meta {
+            display: flex;
+            align-items: center;
+            gap: 14px;
+            font-size: 0.82rem;
+            color: #475569;
+            flex-wrap: wrap;
+        }
+        .stop-meta .status {
+            padding: 3px 14px;
+            border-radius: 30px;
+            font-weight: 600;
+            font-size: 0.7rem;
+            letter-spacing: 0.3px;
+            display: inline-flex;
+            align-items: center;
+            gap: 5px;
+            transition: all 0.3s ease;
+        }
+        .stop-meta .status.pending {
+            background: #fef3c7;
+            color: #92400e;
+        }
+        .stop-meta .status.completed {
+            background: #d1fae5;
+            color: #065f46;
+        }
+        .stop-meta .status.optimized {
+            background: #dbeafe;
+            color: #1e40af;
+        }
+        .stop-meta .distance {
+            font-weight: 500;
+            color: #475569;
+        }
+        .stop-coords {
+            font-size: 0.7rem;
+            color: #94a3b8;
+            font-family: 'Courier New', monospace;
+        }
+        .stop-actions {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            margin-left: 12px;
+        }
+
+        .btn-complete {
+            background: #10b981;
+            color: white;
+            border: none;
+            border-radius: 30px;
+            padding: 6px 14px;
+            font-size: 0.7rem;
+            font-weight: 600;
+            cursor: pointer;
+            transition: all 0.2s ease;
+            white-space: nowrap;
+            display: inline-flex;
+            align-items: center;
+            gap: 5px;
+        }
+        .btn-complete:hover:not(:disabled) {
+            background: #059669;
+            transform: scale(1.05);
+            box-shadow: 0 4px 12px rgba(16, 185, 129, 0.3);
+        }
+        .btn-complete:disabled {
+            opacity: 0.5;
+            cursor: not-allowed;
+        }
+        .btn-complete i {
+            font-size: 0.65rem;
+        }
+
+        .stop-icon {
+            color: #94a3b8;
+            font-size: 1rem;
+            opacity: 0.6;
+            transition: all 0.2s ease;
+            cursor: pointer;
+        }
+        .stop-icon:hover {
+            opacity: 1;
+            transform: scale(1.1);
+        }
+        .stop-icon .fa-times-circle {
+            color: #ef4444;
+        }
+        .stop-icon .fa-times-circle:hover {
+            color: #dc2626;
+        }
+
+        /* ============================================================
+           ACTION BUTTONS
+           ============================================================ */
+        .actions {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 12px;
+            margin-top: 8px;
+        }
+        .btn {
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            gap: 8px;
+            padding: 12px 24px;
+            border: none;
+            border-radius: 60px;
+            font-weight: 600;
+            font-size: 0.9rem;
+            background: #f1f4f9;
+            color: #1e293b;
+            cursor: pointer;
+            transition: all 0.25s cubic-bezier(0.4, 0, 0.2, 1);
+            box-shadow: 0 1px 3px rgba(0,0,0,0.02);
+            flex: 1 0 auto;
+            min-width: 100px;
+            position: relative;
+        }
+        .btn:disabled {
+            opacity: 0.5;
+            cursor: not-allowed;
+        }
+        .btn i {
+            font-size: 1rem;
+        }
+        .btn-primary {
+            background: #3b82f6;
+            color: white;
+            box-shadow: 0 4px 12px -4px rgba(59, 130, 246, 0.4);
+        }
+        .btn-primary:hover:not(:disabled) {
+            background: #2563eb;
+            transform: translateY(-2px);
+            box-shadow: 0 8px 20px -6px rgba(59, 130, 246, 0.5);
+        }
+        .btn-success {
+            background: #10b981;
+            color: white;
+            box-shadow: 0 4px 12px -4px rgba(16, 185, 129, 0.4);
+        }
+        .btn-success:hover:not(:disabled) {
+            background: #059669;
+            transform: translateY(-2px);
+            box-shadow: 0 8px 20px -6px rgba(16, 185, 129, 0.5);
+        }
+        .btn-warning {
+            background: #f59e0b;
+            color: white;
+            box-shadow: 0 4px 12px -4px rgba(245, 158, 11, 0.4);
+        }
+        .btn-warning:hover:not(:disabled) {
+            background: #d97706;
+            transform: translateY(-2px);
+            box-shadow: 0 8px 20px -6px rgba(245, 158, 11, 0.5);
+        }
+        .btn-danger {
+            background: #ef4444;
+            color: white;
+        }
+        .btn-danger:hover:not(:disabled) {
+            background: #dc2626;
+        }
+        .btn-google {
+            background: #ea4335;
+            color: white;
+        }
+        .btn-google:hover:not(:disabled) {
+            background: #d33426;
+            transform: translateY(-2px);
+        }
+        .btn-purple {
+            background: #8b5cf6;
+            color: white;
+            box-shadow: 0 4px 12px -4px rgba(139, 92, 246, 0.4);
+        }
+        .btn-purple:hover:not(:disabled) {
+            background: #7c3aed;
+            transform: translateY(-2px);
+            box-shadow: 0 8px 20px -6px rgba(139, 92, 246, 0.5);
+        }
+        .btn-teal {
+            background: #14b8a6;
+            color: white;
+            box-shadow: 0 4px 12px -4px rgba(20, 184, 166, 0.4);
+        }
+        .btn-teal:hover:not(:disabled) {
+            background: #0d9488;
+            transform: translateY(-2px);
+            box-shadow: 0 8px 20px -6px rgba(20, 184, 166, 0.5);
+        }
+
+        /* ============================================================
+           RIGHT SIDE - MAP PANEL
+           ============================================================ */
+        .map-panel {
+            flex: 2 1 560px;
+            padding: 32px 28px;
+            background: #ffffff;
+            display: flex;
+            flex-direction: column;
+        }
+
+        .map-container {
+            background: #eef2f8;
+            border-radius: 24px;
+            height: 300px;
+            border: 1px solid #e2e9f2;
+            overflow: hidden;
+            box-shadow: inset 0 2px 8px rgba(0,0,0,0.02);
+            margin-bottom: 28px;
+            position: relative;
+            cursor: crosshair;
+            transition: all 0.3s ease;
+        }
+        .map-container:hover {
+            border-color: #cbd5e1;
+        }
+        #leaflet-map {
+            width: 100%;
+            height: 100%;
+            border-radius: 24px;
+        }
+
+        /* ============================================================
+           INFORMATION PANEL
+           ============================================================ */
+        .info-panel {
+            background: #f8fafc;
+            border-radius: 20px;
+            padding: 20px 24px;
+            border: 1px solid #eef2f8;
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(140px, 1fr));
+            gap: 16px 20px;
+            transition: all 0.3s ease;
+        }
+        .info-panel:hover {
+            border-color: #d1d9e8;
+        }
+        .info-item {
+            display: flex;
+            flex-direction: column;
+            gap: 2px;
+        }
+        .info-item .label {
+            font-size: 0.65rem;
+            text-transform: uppercase;
+            letter-spacing: 0.6px;
+            color: #94a3b8;
+            font-weight: 600;
+        }
+        .info-item .value {
+            font-size: 1.15rem;
+            font-weight: 700;
+            color: #0f172a;
+            margin-top: 2px;
+            transition: all 0.3s ease;
+        }
+        .info-item .value small {
+            font-weight: 400;
+            font-size: 0.75rem;
+            color: #94a3b8;
+            margin-left: 4px;
+        }
+        .info-item .value i {
+            color: #3b82f6;
+            margin-right: 6px;
+            font-size: 0.9rem;
+        }
+        .info-item .value.error {
+            color: #ef4444;
+            font-size: 0.9rem;
+        }
+        .info-item .value.highlight {
+            color: #3b82f6;
+        }
+        .info-item .value.restored {
+            color: #14b8a6;
+            animation: pulseRestore 2s ease;
+        }
+
+        @keyframes pulseRestore {
+            0% { transform: scale(1); }
+            50% { transform: scale(1.05); }
+            100% { transform: scale(1); }
+        }
+
+        /* Navigation buttons in info panel */
+        .nav-actions {
+            display: flex;
+            gap: 8px;
+            margin-top: 4px;
+            flex-wrap: wrap;
+        }
+        .nav-actions .btn {
+            padding: 6px 14px;
+            font-size: 0.75rem;
+            min-width: auto;
+            flex: 0 1 auto;
+        }
+        .nav-actions .btn i {
+            font-size: 0.8rem;
+        }
+
+        /* ============================================================
+           TOAST NOTIFICATION
+           ============================================================ */
+        .toast-container {
+            position: fixed;
+            bottom: 30px;
+            right: 30px;
+            z-index: 9999;
+            display: flex;
+            flex-direction: column;
+            gap: 12px;
+            max-width: 400px;
+        }
+        .toast {
+            background: #0f172a;
+            color: white;
+            padding: 16px 24px;
+            border-radius: 16px;
+            box-shadow: 0 20px 40px -12px rgba(0, 0, 0, 0.3);
+            display: flex;
+            align-items: center;
+            gap: 14px;
+            animation: slideInRight 0.4s cubic-bezier(0.4, 0, 0.2, 1) forwards;
+            transition: all 0.3s ease;
+            border-left: 4px solid #3b82f6;
+            backdrop-filter: blur(10px);
+        }
+        .toast.success {
+            border-left-color: #10b981;
+        }
+        .toast.error {
+            border-left-color: #ef4444;
+        }
+        .toast.warning {
+            border-left-color: #f59e0b;
+        }
+        .toast.info {
+            border-left-color: #3b82f6;
+        }
+        .toast.restore {
+            border-left-color: #14b8a6;
+        }
+        .toast i {
+            font-size: 1.4rem;
+            color: #60a5fa;
+        }
+        .toast.success i {
+            color: #34d399;
+        }
+        .toast.error i {
+            color: #f87171;
+        }
+        .toast.warning i {
+            color: #fbbf24;
+        }
+        .toast.info i {
+            color: #60a5fa;
+        }
+        .toast.restore i {
+            color: #2dd4bf;
+        }
+        .toast-message {
+            flex: 1;
+            font-size: 0.9rem;
+            font-weight: 500;
+            line-height: 1.4;
+        }
+        .toast-close {
+            cursor: pointer;
+            opacity: 0.6;
+            transition: 0.2s;
+            font-size: 1.2rem;
+            background: none;
+            border: none;
+            color: white;
+        }
+        .toast-close:hover {
+            opacity: 1;
+            transform: scale(1.1);
+        }
+        .toast.hiding {
+            animation: slideOutRight 0.3s ease forwards;
+        }
+
+        /* ============================================================
+           LOADING SPINNER
+           ============================================================ */
+        .spinner-overlay {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: rgba(15, 23, 42, 0.5);
+            backdrop-filter: blur(8px);
+            z-index: 9998;
+            display: none;
+            justify-content: center;
+            align-items: center;
+            animation: fadeIn 0.3s ease;
+        }
+        .spinner-overlay.active {
+            display: flex;
+        }
+        .spinner-content {
+            background: white;
+            padding: 40px 48px;
+            border-radius: 24px;
+            box-shadow: 0 40px 80px -20px rgba(0, 0, 0, 0.4);
+            text-align: center;
+            animation: scaleIn 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+        }
+        .spinner-content i {
+            font-size: 3.5rem;
+            color: #3b82f6;
+            animation: spin 0.8s linear infinite;
+            display: block;
+            margin-bottom: 16px;
+        }
+        .spinner-content p {
+            font-size: 1.1rem;
+            font-weight: 600;
+            color: #0f172a;
+        }
+
+        /* ============================================================
+           ANIMATIONS
+           ============================================================ */
+        @keyframes slideIn {
+            from {
+                opacity: 0;
+                transform: translateY(-10px);
+            }
+            to {
+                opacity: 1;
+                transform: translateY(0);
+            }
+        }
+        @keyframes slideOut {
+            from {
+                opacity: 1;
+                transform: translateX(0);
+            }
+            to {
+                opacity: 0;
+                transform: translateX(-30px);
+            }
+        }
+        @keyframes slideInRight {
+            from {
+                opacity: 0;
+                transform: translateX(60px);
+            }
+            to {
+                opacity: 1;
+                transform: translateX(0);
+            }
+        }
+        @keyframes slideOutRight {
+            from {
+                opacity: 1;
+                transform: translateX(0);
+            }
+            to {
+                opacity: 0;
+                transform: translateX(60px);
+            }
+        }
+        @keyframes fadeIn {
+            from {
+                opacity: 0;
+            }
+            to {
+                opacity: 1;
+            }
+        }
+        @keyframes scaleIn {
+            from {
+                opacity: 0;
+                transform: scale(0.9);
+            }
+            to {
+                opacity: 1;
+                transform: scale(1);
+            }
+        }
+        @keyframes spin {
+            from {
+                transform: rotate(0deg);
+            }
+            to {
+                transform: rotate(360deg);
+            }
+        }
+
+        /* ============================================================
+           RESPONSIVE
+           ============================================================ */
+        @media (max-width: 820px) {
+            .stops-panel {
+                border-right: none;
+                border-bottom: 1px solid #e9edf4;
+            }
+            .dashboard {
+                flex-direction: column;
+            }
+            .header h1 {
+                font-size: 1.6rem;
+            }
+            .info-panel {
+                grid-template-columns: repeat(auto-fit, minmax(120px, 1fr));
+                gap: 12px 16px;
+            }
+            .toast-container {
+                bottom: 20px;
+                right: 20px;
+                left: 20px;
+                max-width: 100%;
+            }
+            .header-controls {
+                flex-direction: column;
+                align-items: stretch;
+            }
+        }
+        @media (max-width: 480px) {
+            .app {
+                border-radius: 20px;
+            }
+            .header {
+                padding: 20px 18px;
+            }
+            .header h1 {
+                font-size: 1.3rem;
+                gap: 10px;
+            }
+            .header h1 i {
+                font-size: 1.6rem;
+            }
+            .stops-panel, .map-panel {
+                padding: 20px 16px;
+            }
+            .btn {
+                flex: 1 1 100%;
+                padding: 10px 18px;
+                font-size: 0.85rem;
+            }
+            .info-panel {
+                grid-template-columns: 1fr 1fr;
+                gap: 10px;
+                padding: 16px;
+            }
+            .map-container {
+                height: 200px;
+            }
+            .stop-card {
+                padding: 14px 14px;
+            }
+            .spinner-content {
+                padding: 32px 28px;
+                margin: 20px;
+            }
+            .toast-container {
+                bottom: 16px;
+                right: 16px;
+                left: 16px;
+            }
+            .toast {
+                padding: 14px 18px;
+                font-size: 0.85rem;
+            }
+        }
+    </style>
+</head>
+<body>
+    <!-- Toast Container -->
+    <div class="toast-container" id="toast-container"></div>
+
+    <!-- Loading Spinner -->
+    <div class="spinner-overlay" id="spinner-overlay">
+        <div class="spinner-content">
+            <i class="fas fa-spinner"></i>
+            <p>Loading stores...</p>
+        </div>
+    </div>
+
+    <!-- ============================================================
+    MAIN APP
+    ============================================================ -->
+    <div class="app">
+        <!-- HEADER -->
+        <header class="header">
+            <h1>
+                <i class="fas fa-route"></i>
+                Smart Delivery Route Optimizer
+            </h1>
+            <div class="header-controls">
+                <label>
+                    <i class="fas fa-travel"></i> Travel Mode:
+                    <select id="travel-mode">
+                        <option value="driving">🚗 Driving</option>
+                        <option value="cycling">🚲 Cycling</option>
+                    </select>
+                </label>
+                <span style="font-size: 0.75rem; color: #94a3b8; margin-left: auto;" id="session-status">
+                    <i class="fas fa-save"></i> Auto-saved
+                </span>
+            </div>
+        </header>
+
+        <!-- DASHBOARD -->
+        <div class="dashboard">
+            <!-- LEFT: Delivery Stops -->
+            <section class="stops-panel">
+                <h2>
+                    <i class="fas fa-map-pin"></i> Delivery Stops
+                    <span style="font-size: 0.8rem; font-weight: 400; color: #94a3b8; margin-left: auto;" id="stop-count">(0)</span>
+                </h2>
+
+                <div class="stops-list" id="stops-list">
+                    <div style="text-align: center; padding: 30px 20px; color: #94a3b8; font-size: 0.95rem;">
+                        <i class="fas fa-store" style="font-size: 2.5rem; display: block; margin-bottom: 12px; opacity: 0.3;"></i>
+                        No stores added yet.<br>Click "Add Store" to get started.
+                    </div>
+                </div>
+
+                <div class="actions">
+                    <button class="btn btn-primary" id="add-store-btn"><i class="fas fa-plus-circle"></i> Add Store</button>
+                    <button class="btn btn-success" id="optimize-btn" disabled><i class="fas fa-route"></i> Optimize Route</button>
+                    <button class="btn btn-warning" id="reset-btn"><i class="fas fa-undo-alt"></i> Reset</button>
+                    <button class="btn btn-purple" id="export-report-btn"><i class="fas fa-file-excel"></i> Export Report</button>
+                </div>
+                <p style="font-size: 0.75rem; color: #94a3b8; margin-top: 16px; opacity: 0.7; letter-spacing: 0.2px;" id="status-message">
+                    <i class="fas fa-info-circle"></i> Click "Add Store" then click on map
+                </p>
+            </section>
+
+            <!-- RIGHT: Map + Info -->
+            <section class="map-panel">
+                <div class="map-container">
+                    <div id="leaflet-map"></div>
+                </div>
+
+                <div class="info-panel">
+                    <div class="info-item" id="current-location-item">
+                        <span class="label"><i class="fas fa-location-dot"></i> Current Location</span>
+                        <span class="value" id="current-location-value">Not Available</span>
+                    </div>
+                    <div class="info-item">
+                        <span class="label"><i class="fas fa-flag-checkered"></i> Next Destination</span>
+                        <span class="value" id="next-destination">None</span>
+                    </div>
+                    <div class="info-item">
+                        <span class="label"><i class="fas fa-boxes"></i> Remaining Stops</span>
+                        <span class="value" id="remaining-stops">0</span>
+                    </div>
+                    <div class="info-item">
+                        <span class="label"><i class="fas fa-arrows-left-right"></i> Total Distance</span>
+                        <span class="value" id="total-distance">0 <small>km</small></span>
+                    </div>
+                    <div class="info-item">
+                        <span class="label"><i class="fas fa-clock"></i> Estimated Time</span>
+                        <span class="value" id="estimated-time">0 <small>mins</small></span>
+                    </div>
+                    <div class="info-item">
+                        <span class="label"><i class="fas fa-check-circle"></i> Completed Deliveries</span>
+                        <span class="value" id="completed-deliveries">0</span>
+                        <div class="nav-actions">
+                            <button class="btn btn-google" id="navigate-next" disabled>
+                                <i class="fab fa-google"></i> Navigate Next
+                            </button>
+                            <button class="btn btn-google" id="navigate-full" disabled>
+                                <i class="fas fa-route"></i> Full Route
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            </section>
+        </div>
+    </div>
+
+    <!-- ============================================================
+    JAVASCRIPT
+    ============================================================ -->
+    <script>
+        (function() {
+            'use strict';
+
+            // ============================================================
+            // 1. CONSTANTS & CONFIGURATION
+            // ============================================================
+            const STORAGE_KEY = 'delivery_optimizer_data';
+            const STORAGE_VERSION = '2.0.0';
+            const DELHI_CENTER = { lat: 28.65, lng: 77.15 };
+
+            // ============================================================
+            // 2. STATE MANAGEMENT
+            // ============================================================
+            const state = {
+                stops: [],
+                nextId: 1,
+                userLocation: null,
+                optimizedRoute: [],
+                isAddingStore: false,
+                pendingStoreName: '',
+                travelMode: 'driving',
+                routeSegments: [],
+                totalDistance: 0,
+                totalDuration: 0,
+                isInitialized: false,
+                masterStores: [],
+                storesLoaded: false,
+                isRestoring: false,
+                saveTimeout: null,
+            };
+
+            // Map-related references
+            let map = null;
+            let userMarker = null;
+            let routePolylines = [];
+            let routeMarkers = [];
+
+            // ============================================================
+            // 3. DOM REFERENCES
+            // ============================================================
+            const DOM = {
+                stopsList: document.getElementById('stops-list'),
+                stopCount: document.getElementById('stop-count'),
+                statusMessage: document.getElementById('status-message'),
+                locationValue: document.getElementById('current-location-value'),
+                remainingStops: document.getElementById('remaining-stops'),
+                completedDeliveries: document.getElementById('completed-deliveries'),
+                nextDestination: document.getElementById('next-destination'),
+                totalDistance: document.getElementById('total-distance'),
+                estimatedTime: document.getElementById('estimated-time'),
+                addStoreBtn: document.getElementById('add-store-btn'),
+                resetBtn: document.getElementById('reset-btn'),
+                optimizeBtn: document.getElementById('optimize-btn'),
+                exportReportBtn: document.getElementById('export-report-btn'),
+                navigateNext: document.getElementById('navigate-next'),
+                navigateFull: document.getElementById('navigate-full'),
+                travelMode: document.getElementById('travel-mode'),
+                mapContainer: document.getElementById('leaflet-map'),
+                spinner: document.getElementById('spinner-overlay'),
+                toastContainer: document.getElementById('toast-container'),
+                sessionStatus: document.getElementById('session-status'),
+            };
+
+            // ============================================================
+            // 4. LOCAL STORAGE - PERSISTENCE LAYER
+            // ============================================================
+
+            /**
+             * Save the complete application state to localStorage
+             */
+            function saveState() {
+                // Debounce saves to avoid excessive writes
+                if (state.saveTimeout) {
+                    clearTimeout(state.saveTimeout);
+                }
+
+                state.saveTimeout = setTimeout(() => {
+                    try {
+                        const data = {
+                            version: STORAGE_VERSION,
+                            generatedAt: new Date().toISOString(),
+                            travelMode: state.travelMode,
+                            stores: state.stops.map(stop => ({
+                                id: stop.id,
+                                name: stop.name,
+                                lat: stop.lat,
+                                lng: stop.lng,
+                                status: stop.status,
+                                optimizedOrder: stop.optimizedOrder,
+                                distanceFromPrevious: stop.distanceFromPrevious,
+                                durationFromPrevious: stop.durationFromPrevious,
+                                completedAt: stop.completedAt ? stop.completedAt.toISOString() : null,
+                            })),
+                            optimizedRoute: state.optimizedRoute,
+                            totalDistance: state.totalDistance,
+                            totalDuration: state.totalDuration,
+                            userLocation: state.userLocation,
+                            nextId: state.nextId,
+                            routeSegments: state.routeSegments.map(seg => ({
+                                from: seg.from,
+                                to: seg.to,
+                                distance: seg.distance,
+                                duration: seg.duration,
+                                geometry: seg.geometry,
+                            })),
+                            statistics: {
+                                totalStops: state.stops.length,
+                                completed: state.stops.filter(s => s.status === 'Completed').length,
+                                pending: state.stops.filter(s => s.status === 'Pending').length,
+                            }
+                        };
+
+                        localStorage.setItem(STORAGE_KEY, JSON.stringify(data));
+                        updateSessionStatus('Auto-saved', 'success');
+
+                    } catch (error) {
+                        console.error('Failed to save state:', error);
+                        updateSessionStatus('Save failed', 'error');
+                    }
+                }, 300);
+            }
+
+            /**
+             * Load the application state from localStorage
+             * @returns {Object|null} The saved state or null if not found/invalid
+             */
+            function loadState() {
+                try {
+                    const raw = localStorage.getItem(STORAGE_KEY);
+                    if (!raw) return null;
+
+                    const data = JSON.parse(raw);
+
+                    // Validate required fields
+                    if (!data.version || !data.stores || !Array.isArray(data.stores)) {
+                        console.warn('Invalid saved data structure');
+                        localStorage.removeItem(STORAGE_KEY);
+                        return null;
+                    }
+
+                    // Check version compatibility
+                    if (data.version !== STORAGE_VERSION) {
+                        console.warn(`Version mismatch: saved ${data.version}, current ${STORAGE_VERSION}`);
+                        localStorage.removeItem(STORAGE_KEY);
+                        return null;
+                    }
+
+                    return data;
+
+                } catch (error) {
+                    console.error('Failed to load saved state:', error);
+                    localStorage.removeItem(STORAGE_KEY);
+                    return null;
+                }
+            }
+
+            /**
+             * Clear the saved state from localStorage
+             */
+            function clearSavedState() {
+                localStorage.removeItem(STORAGE_KEY);
+                updateSessionStatus('Session cleared', 'warning');
+            }
+
+            /**
+             * Update the session status indicator
+             */
+            function updateSessionStatus(message, type = 'info') {
+                const icon = type === 'success' ? 'fa-check-circle' :
+                            type === 'error' ? 'fa-exclamation-circle' :
+                            type === 'warning' ? 'fa-exclamation-triangle' : 'fa-save';
+                const color = type === 'success' ? '#34d399' :
+                              type === 'error' ? '#f87171' :
+                              type === 'warning' ? '#fbbf24' : '#94a3b8';
+                DOM.sessionStatus.innerHTML = `<i class="fas ${icon}" style="color: ${color};"></i> ${message}`;
+            }
+
+            // ============================================================
+            // 5. STATE RESTORATION
+            // ============================================================
+
+            /**
+             * Restore the application state from saved data
+             * @param {Object} savedData - The saved state data
+             * @returns {boolean} True if restoration was successful
+             */
+            function restoreState(savedData) {
+                try {
+                    state.isRestoring = true;
+
+                    // Restore basic properties
+                    state.travelMode = savedData.travelMode || 'driving';
+                    state.optimizedRoute = savedData.optimizedRoute || [];
+                    state.totalDistance = savedData.totalDistance || 0;
+                    state.totalDuration = savedData.totalDuration || 0;
+                    state.nextId = savedData.nextId || 1;
+                    state.userLocation = savedData.userLocation || null;
+
+                    // Restore route segments if available
+                    if (savedData.routeSegments && Array.isArray(savedData.routeSegments)) {
+                        state.routeSegments = savedData.routeSegments;
+                    } else {
+                        state.routeSegments = [];
+                    }
+
+                    // Restore stops
+                    state.stops = savedData.stores.map(store => ({
+                        id: store.id,
+                        name: store.name,
+                        lat: store.lat,
+                        lng: store.lng,
+                        status: store.status || 'Pending',
+                        optimizedOrder: store.optimizedOrder,
+                        distanceFromPrevious: store.distanceFromPrevious,
+                        durationFromPrevious: store.durationFromPrevious,
+                        completedAt: store.completedAt ? new Date(store.completedAt) : null,
+                        marker: null,
+                    }));
+
+                    // Update travel mode dropdown
+                    DOM.travelMode.value = state.travelMode;
+
+                    // Render the restored state
+                    renderStops();
+                    updateInfoPanel();
+                    updateOptimizeButton();
+                    updateNavigationButtons();
+
+                    // Restore markers on map
+                    if (map) {
+                        state.stops.forEach(stop => {
+                            addMarkerToMap(stop);
+                        });
+
+                        // Restore user location marker
+                        if (state.userLocation) {
+                            centerMapOnUser(state.userLocation.lat, state.userLocation.lng);
+                        }
+
+                        // Restore route visualization if there are route segments
+                        if (state.routeSegments.length > 0) {
+                            drawRouteVisualization();
+                        } else if (state.optimizedRoute.length > 0) {
+                            // Try to rebuild route if we have optimized order but no segments
+                            setTimeout(() => {
+                                const pending = state.stops.filter(s => s.status === 'Pending');
+                                if (pending.length >= 2) {
+                                    optimizeRoute();
+                                }
+                            }, 500);
+                        }
+
+                        // Fit map to show all locations
+                        setTimeout(() => {
+                            fitMapToAllLocations();
+                        }, 300);
+                    }
+
+                    // Update session status
+                    const completed = state.stops.filter(s => s.status === 'Completed').length;
+                    const total = state.stops.length;
+                    const dateStr = savedData.generatedAt ? new Date(savedData.generatedAt).toLocaleString() : 'unknown time';
+                    
+                    showToast(`🔄 Previous delivery session restored (${completed}/${total} completed)`, 'restore', 5000);
+                    setStatusMessage(`Session restored from ${dateStr} - ${completed}/${total} completed`);
+
+                    state.isRestoring = false;
+                    return true;
+
+                } catch (error) {
+                    console.error('Failed to restore state:', error);
+                    state.isRestoring = false;
+                    return false;
+                }
+            }
+
+            // ============================================================
+            // 6. MAP INITIALIZATION
+            // ============================================================
+            function initMap() {
+                if (map) return;
+
+                map = L.map(DOM.mapContainer, {
+                    center: [DELHI_CENTER.lat, DELHI_CENTER.lng],
+                    zoom: 11,
+                    zoomControl: true,
+                    fadeAnimation: true,
+                    attributionControl: true
+                });
+
+                L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+                    maxZoom: 19,
+                    attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors'
+                }).addTo(map);
+
+                const resizeObserver = new ResizeObserver(() => {
+                    if (map) map.invalidateSize();
+                });
+                resizeObserver.observe(DOM.mapContainer);
+
+                setTimeout(() => {
+                    if (map) map.invalidateSize();
+                }, 300);
+
+                map.on('click', handleMapClick);
+                console.log('✅ Map initialized');
+            }
+
+            /**
+             * Fit map to show all stops and user location if available
+             */
+            function fitMapToAllLocations() {
+                if (!map) return;
+
+                const points = [];
+
+                state.stops.forEach(stop => {
+                    points.push([stop.lat, stop.lng]);
+                });
+
+                if (state.userLocation) {
+                    points.push([state.userLocation.lat, state.userLocation.lng]);
+                }
+
+                if (points.length > 1) {
+                    const bounds = L.latLngBounds(points);
+                    map.fitBounds(bounds, {
+                        padding: [40, 40],
+                        maxZoom: 13,
+                        animate: true,
+                        duration: 1
+                    });
+                } else if (points.length === 1) {
+                    map.setView(points[0], 14, { animate: true, duration: 1 });
+                } else {
+                    map.setView([DELHI_CENTER.lat, DELHI_CENTER.lng], 11, { animate: true, duration: 1 });
+                }
+            }
+
+            // ============================================================
+            // 7. GEOLOCATION
+            // ============================================================
+            function requestGeolocation() {
+                if (!navigator.geolocation) {
+                    updateLocationDisplay('Geolocation not supported', true);
+                    showToast('Geolocation not supported in this browser', 'error');
+                    return;
+                }
+
+                // Check if we have saved location first
+                if (state.userLocation) {
+                    updateLocationDisplay(`${state.userLocation.lat.toFixed(6)}, ${state.userLocation.lng.toFixed(6)}`, false);
+                    if (map) {
+                        centerMapOnUser(state.userLocation.lat, state.userLocation.lng);
+                        setTimeout(fitMapToAllLocations, 300);
+                    }
+                    return;
+                }
+
+                updateLocationDisplay('Fetching location...', false);
+
+                navigator.geolocation.getCurrentPosition(
+                    (position) => {
+                        const { latitude: lat, longitude: lng, accuracy } = position.coords;
+                        state.userLocation = { lat, lng };
+
+                        const coordStr = `${lat.toFixed(6)}, ${lng.toFixed(6)}`;
+                        const accuracyStr = accuracy ? ` (±${Math.round(accuracy)}m)` : '';
+                        updateLocationDisplay(`${coordStr}${accuracyStr}`, false);
+
+                        if (!map) {
+                            initMap();
+                            setTimeout(() => {
+                                centerMapOnUser(lat, lng);
+                                fitMapToAllLocations();
+                            }, 100);
+                        } else {
+                            centerMapOnUser(lat, lng);
+                            fitMapToAllLocations();
+                        }
+
+                        updateOptimizeButton();
+                        updateNavigationButtons();
+                        showToast('📍 Location acquired successfully', 'success');
+
+                        if (!state.isInitialized && state.stops.length >= 2) {
+                            setTimeout(optimizeRoute, 800);
+                        }
+                        state.isInitialized = true;
+                        saveState();
+                    },
+                    (error) => {
+                        let errorMsg = 'Location unavailable';
+                        switch (error.code) {
+                            case error.PERMISSION_DENIED:
+                                errorMsg = '❌ Permission denied. Enable location in browser settings.';
+                                break;
+                            case error.POSITION_UNAVAILABLE:
+                                errorMsg = '📍 Position unavailable. Please try again.';
+                                break;
+                            case error.TIMEOUT:
+                                errorMsg = '⏱️ Location request timed out.';
+                                break;
+                            default:
+                                errorMsg = `⚠️ Error: ${error.message}`;
+                        }
+                        updateLocationDisplay(errorMsg, true);
+                        showToast(errorMsg, 'error');
+                        console.warn('Geolocation error:', error.message);
+                    },
+                    { enableHighAccuracy: true, timeout: 10000, maximumAge: 60000 }
+                );
+            }
+
+            function centerMapOnUser(lat, lng) {
+                if (!map) return;
+
+                if (userMarker) {
+                    map.removeLayer(userMarker);
+                    userMarker = null;
+                }
+
+                const userLatLng = L.latLng(lat, lng);
+                const blueIcon = L.icon({
+                    iconUrl: 'https://unpkg.com/leaflet@1.9.4/dist/images/marker-icon.png',
+                    shadowUrl: 'https://unpkg.com/leaflet@1.9.4/dist/images/marker-shadow.png',
+                    iconSize: [25, 41],
+                    iconAnchor: [12, 41],
+                    popupAnchor: [1, -34],
+                    shadowSize: [41, 41]
+                });
+
+                userMarker = L.marker(userLatLng, { icon: blueIcon, title: 'Your Location' }).addTo(map);
+                L.circle(userLatLng, {
+                    color: '#3b82f6',
+                    fillColor: '#3b82f6',
+                    fillOpacity: 0.15,
+                    radius: 50,
+                    weight: 2
+                }).addTo(map);
+                userMarker.bindPopup('📍 You are here');
+            }
+
+            function updateLocationDisplay(text, isError = false) {
+                DOM.locationValue.textContent = text;
+                DOM.locationValue.classList.toggle('error', isError);
+            }
+
+            // ============================================================
+            // 8. LOAD MASTER STORES FROM JSON
+            // ============================================================
+            async function loadMasterStores() {
+                try {
+                    showSpinner(true);
+                    setStatusMessage('📦 Loading store dataset...');
+
+                    const possiblePaths = [
+                        'stores.json',
+                        './stores.json',
+                        '/stores.json',
+                        '../stores.json'
+                    ];
+
+                    let data = null;
+                    let loadedPath = '';
+
+                    for (const path of possiblePaths) {
+                        try {
+                            console.log(`Attempting to load: ${path}`);
+                            const response = await fetch(path);
+                            if (response.ok) {
+                                data = await response.json();
+                                loadedPath = path;
+                                console.log(`✅ Successfully loaded stores.json from: ${path}`);
+                                break;
+                            }
+                        } catch (e) {
+                            console.log(`Failed to load from: ${path}`);
+                        }
+                    }
+
+                    if (!data || !data.stores || !Array.isArray(data.stores) || data.stores.length === 0) {
+                        console.warn('⚠️ No stores.json found or invalid data, using fallback dataset');
+                        showToast('⚠️ Using fallback store dataset', 'warning');
+                        state.masterStores = getFallbackStores();
+                        state.storesLoaded = false;
+                    } else {
+                        state.masterStores = data.stores;
+                        state.storesLoaded = true;
+                        console.log(`✅ Loaded ${state.masterStores.length} stores from ${loadedPath}`);
+                        showToast(`📦 Loaded ${state.masterStores.length} stores from dataset`, 'success');
+                    }
+
+                    // Check for saved session before generating new stores
+                    const savedData = loadState();
+                    if (savedData && savedData.stores && savedData.stores.length > 0) {
+                        // Restore saved session
+                        const restored = restoreState(savedData);
+                        if (restored) {
+                            // Request location after restoration
+                            setTimeout(requestGeolocation, 500);
+                            showSpinner(false);
+                            return;
+                        }
+                    }
+
+                    // No valid saved session, generate new random stores
+                    selectRandomStores();
+
+                } catch (error) {
+                    console.error('Error loading stores:', error);
+                    showToast('⚠️ Using fallback stores due to load error', 'warning');
+                    state.masterStores = getFallbackStores();
+                    state.storesLoaded = false;
+                    
+                    // Check for saved session again with fallback data
+                    const savedData = loadState();
+                    if (savedData && savedData.stores && savedData.stores.length > 0) {
+                        const restored = restoreState(savedData);
+                        if (restored) {
+                            setTimeout(requestGeolocation, 500);
+                            showSpinner(false);
+                            return;
+                        }
+                    }
+                    
+                    selectRandomStores();
+                } finally {
+                    showSpinner(false);
+                }
+            }
+
+            /**
+             * Fallback stores in case JSON fails to load
+             */
+            function getFallbackStores() {
+                return [
+                    { id: 1, name: 'Connaught Place', lat: 28.6315, lng: 77.2167 },
+                    { id: 2, name: 'India Gate', lat: 28.6129, lng: 77.2295 },
+                    { id: 3, name: 'Karol Bagh', lat: 28.6519, lng: 77.1909 },
+                    { id: 4, name: 'Lajpat Nagar', lat: 28.5677, lng: 77.2430 },
+                    { id: 5, name: 'Rohini Sector 18', lat: 28.7383, lng: 77.0824 },
+                    { id: 6, name: 'Dwarka Sector 10', lat: 28.5839, lng: 77.0625 },
+                    { id: 7, name: 'Janakpuri', lat: 28.6236, lng: 77.0891 },
+                    { id: 8, name: 'Rajouri Garden', lat: 28.6455, lng: 77.1165 },
+                    { id: 9, name: 'Saket', lat: 28.5272, lng: 77.2076 },
+                    { id: 10, name: 'Hauz Khas', lat: 28.5489, lng: 77.2103 },
+                ];
+            }
+
+            // ============================================================
+            // 9. SELECT RANDOM STORES
+            // ============================================================
+            function selectRandomStores() {
+                // Check if we have stores in sessionStorage from today (legacy)
+                const today = new Date().toDateString();
+                const storedData = sessionStorage.getItem('deliveryStores');
+                let selectedStores = [];
+
+                if (storedData) {
+                    try {
+                        const parsed = JSON.parse(storedData);
+                        if (parsed.date === today && parsed.stores && parsed.stores.length === 5) {
+                            selectedStores = parsed.stores;
+                            console.log('✅ Using stores from sessionStorage');
+                            showToast('📦 Using today\'s selected stores', 'info');
+                        }
+                    } catch (e) {
+                        // Invalid data, continue to generate new
+                    }
+                }
+
+                // If no valid session data, generate new selection
+                if (selectedStores.length === 0) {
+                    selectedStores = generateRandomSelection();
+                    sessionStorage.setItem('deliveryStores', JSON.stringify({
+                        date: today,
+                        stores: selectedStores
+                    }));
+                    console.log('✅ Generated new random stores and saved to sessionStorage');
+                    if (state.storesLoaded) {
+                        showToast('📍 Generated new random stores for today', 'success');
+                    }
+                }
+
+                // Add selected stores to the app
+                selectedStores.forEach(store => {
+                    addDeliveryStop(store.name, store.lat, store.lng, store.id);
+                });
+
+                // Fit map and optimize
+                setTimeout(() => {
+                    fitMapToAllLocations();
+                    if (state.userLocation && state.stops.length >= 2) {
+                        setTimeout(optimizeRoute, 500);
+                    }
+                }, 300);
+
+                setStatusMessage(`📍 Loaded ${selectedStores.length} stores. Optimizing route...`);
+                saveState();
+            }
+
+            /**
+             * Generate 5 unique random stores from the master dataset
+             */
+            function generateRandomSelection() {
+                if (state.masterStores.length === 0) {
+                    return getFallbackStores().slice(0, 5);
+                }
+
+                const shuffled = [...state.masterStores];
+                for (let i = shuffled.length - 1; i > 0; i--) {
+                    const j = Math.floor(Math.random() * (i + 1));
+                    [shuffled[i], shuffled[j]] = [shuffled[j], shuffled[i]];
+                }
+
+                return shuffled.slice(0, 5);
+            }
+
+            // ============================================================
+            // 10. OSRM API - ROUTING
+            // ============================================================
+            async function fetchOSRMRoute(lat1, lon1, lat2, lon2, mode = 'driving') {
+                const profile = mode === 'driving' ? 'driving' : 'cycling';
+                const url = `https://router.project-osrm.org/route/v1/${profile}/${lon1},${lat1};${lon2},${lat2}?overview=full&geometries=geojson`;
+
+                try {
+                    const response = await fetch(url);
+                    if (!response.ok) {
+                        throw new Error(`OSRM API error: ${response.status}`);
+                    }
+                    const data = await response.json();
+
+                    if (data.code !== 'Ok' || !data.routes || data.routes.length === 0) {
+                        throw new Error('No route found');
+                    }
+
+                    const route = data.routes[0];
+                    return {
+                        geometry: route.geometry.coordinates,
+                        distance: route.distance / 1000,
+                        duration: route.duration / 60,
+                        raw: route
+                    };
+                } catch (error) {
+                    console.error('OSRM error:', error);
+                    throw error;
+                }
+            }
+
+            async function fetchOSRMRouteSegments(waypoints, mode = 'driving') {
+                const segments = [];
+                let totalDistance = 0;
+                let totalDuration = 0;
+
+                for (let i = 0; i < waypoints.length - 1; i++) {
+                    const from = waypoints[i];
+                    const to = waypoints[i + 1];
+                    try {
+                        const route = await fetchOSRMRoute(from.lat, from.lng, to.lat, to.lng, mode);
+                        segments.push({
+                            from: from,
+                            to: to,
+                            distance: route.distance,
+                            duration: route.duration,
+                            geometry: route.geometry
+                        });
+                        totalDistance += route.distance;
+                        totalDuration += route.duration;
+                    } catch (error) {
+                        console.error(`Failed to fetch route segment ${i}:`, error);
+                        throw error;
+                    }
+                }
+
+                return {
+                    segments,
+                    totalDistance,
+                    totalDuration
+                };
+            }
+
+            // ============================================================
+            // 11. ROUTE OPTIMIZATION
+            // ============================================================
+            async function optimizeRoute() {
+                if (!state.userLocation) {
+                    showToast('Please enable location access first', 'warning');
+                    return;
+                }
+
+                const pending = state.stops.filter(s => s.status === 'Pending');
+                if (pending.length < 2) {
+                    showToast('Need at least 2 pending stores to optimize', 'warning');
+                    return;
+                }
+
+                showSpinner(true);
+
+                try {
+                    const unvisited = [...pending];
+                    const ordered = [];
+                    let currentLat = state.userLocation.lat;
+                    let currentLng = state.userLocation.lng;
+
+                    while (unvisited.length > 0) {
+                        let nearest = null;
+                        let nearestDist = Infinity;
+                        let nearestIndex = -1;
+
+                        unvisited.forEach((store, index) => {
+                            const dist = haversineDistance(
+                                currentLat, currentLng,
+                                store.lat, store.lng
+                            );
+                            if (dist < nearestDist) {
+                                nearestDist = dist;
+                                nearest = store;
+                                nearestIndex = index;
+                            }
+                        });
+
+                        if (nearest) {
+                            unvisited.splice(nearestIndex, 1);
+                            ordered.push(nearest);
+                            currentLat = nearest.lat;
+                            currentLng = nearest.lng;
+                        }
+                    }
+
+                    const waypoints = [
+                        { lat: state.userLocation.lat, lng: state.userLocation.lng },
+                        ...ordered.map(s => ({ lat: s.lat, lng: s.lng }))
+                    ];
+
+                    const mode = state.travelMode;
+                    const result = await fetchOSRMRouteSegments(waypoints, mode);
+
+                    state.optimizedRoute = ordered.map(s => s.id);
+                    state.routeSegments = result.segments;
+                    state.totalDistance = result.totalDistance;
+                    state.totalDuration = result.totalDuration;
+
+                    ordered.forEach((stop, index) => {
+                        if (index === 0) {
+                            stop.distanceFromPrevious = result.segments[0]?.distance || 0;
+                        } else {
+                            stop.distanceFromPrevious = result.segments[index]?.distance || 0;
+                        }
+                        stop.optimizedOrder = index + 1;
+                        stop.durationFromPrevious = result.segments[index]?.duration || 0;
+                    });
+
+                    renderStops();
+                    updateInfoPanel();
+                    drawRouteVisualization();
+
+                    const totalDistKm = Math.round(state.totalDistance * 100) / 100;
+                    const totalMins = Math.round(state.totalDuration);
+                    showToast(`✅ Route optimized! ${totalDistKm} km, ~${totalMins} mins`, 'success');
+                    setStatusMessage(`Route optimized! ${totalDistKm} km total`);
+
+                    updateNavigationButtons();
+                    saveState();
+
+                } catch (error) {
+                    console.error('Optimization error:', error);
+                    showToast('Error optimizing route: ' + error.message, 'error');
+                } finally {
+                    showSpinner(false);
+                }
+            }
+
+            // ============================================================
+            // 12. ROUTE VISUALIZATION
+            // ============================================================
+            function clearRouteVisualization() {
+                routePolylines.forEach(polyline => {
+                    if (polyline) map.removeLayer(polyline);
+                });
+                routePolylines = [];
+
+                routeMarkers.forEach(marker => map.removeLayer(marker));
+                routeMarkers = [];
+            }
+
+            function drawRouteVisualization() {
+                if (!map || state.routeSegments.length === 0) return;
+
+                clearRouteVisualization();
+
+                const allCoords = [];
+
+                state.routeSegments.forEach((segment, index) => {
+                    const coords = segment.geometry.map(coord => [coord[1], coord[0]]);
+
+                    const polyline = L.polyline(coords, {
+                        color: '#3b82f6',
+                        weight: 4,
+                        opacity: 0.8,
+                        lineJoin: 'round',
+                        smoothFactor: 1
+                    }).addTo(map);
+                    routePolylines.push(polyline);
+
+                    const dashLine = L.polyline(coords, {
+                        color: '#60a5fa',
+                        weight: 2,
+                        opacity: 0.3,
+                        dashArray: '10, 12',
+                        lineJoin: 'round'
+                    }).addTo(map);
+                    routePolylines.push(dashLine);
+
+                    allCoords.push(...coords);
+
+                    if (coords.length > 1) {
+                        const midIndex = Math.floor(coords.length / 2);
+                        const midPoint = coords[midIndex];
+                        const distanceKm = Math.round(segment.distance * 100) / 100;
+                        const durationMin = Math.round(segment.duration);
+
+                        const label = L.marker(midPoint, {
+                            icon: L.divIcon({
+                                className: 'segment-label',
+                                html: `<div style="
+                                    background: rgba(15, 23, 42, 0.85);
+                                    color: white;
+                                    padding: 4px 10px;
+                                    border-radius: 20px;
+                                    font-size: 0.7rem;
+                                    font-weight: 600;
+                                    backdrop-filter: blur(4px);
+                                    border: 1px solid rgba(255,255,255,0.1);
+                                    box-shadow: 0 2px 8px rgba(0,0,0,0.2);
+                                ">${distanceKm} km · ${durationMin} min</div>`,
+                                iconSize: [0, 0],
+                                iconAnchor: [0, 0]
+                            })
+                        }).addTo(map);
+                        routeMarkers.push(label);
+                    }
+                });
+
+                const orderedStops = state.optimizedRoute
+                    .map(id => state.stops.find(s => s.id === id))
+                    .filter(s => s && s.status === 'Pending');
+
+                orderedStops.forEach((stop, index) => {
+                    const number = index + 1;
+                    const numberIcon = L.divIcon({
+                        className: 'route-marker',
+                        html: `<div style="
+                            background: #3b82f6;
+                            color: white;
+                            border-radius: 50%;
+                            width: 28px;
+                            height: 28px;
+                            display: flex;
+                            align-items: center;
+                            justify-content: center;
+                            font-weight: bold;
+                            font-size: 12px;
+                            border: 2px solid white;
+                            box-shadow: 0 2px 8px rgba(59, 130, 246, 0.4);
+                        ">${number}</div>`,
+                        iconSize: [28, 28],
+                        iconAnchor: [14, 14]
+                    });
+
+                    const marker = L.marker([stop.lat, stop.lng], {
+                        icon: numberIcon,
+                        title: `${number}. ${stop.name}`,
+                        riseOnHover: true
+                    }).addTo(map);
+
+                    const dist = stop.distanceFromPrevious ? Math.round(stop.distanceFromPrevious * 100) / 100 : 0;
+                    const duration = stop.durationFromPrevious ? Math.round(stop.durationFromPrevious) : 0;
+                    marker.bindPopup(`
+                        <strong>#${number} ${escapeHtml(stop.name)}</strong><br>
+                        Distance: ${dist} km<br>
+                        Time: ${duration} min
+                    `);
+                    routeMarkers.push(marker);
+                });
+
+                if (state.userLocation && orderedStops.length > 0) {
+                    const startIcon = L.divIcon({
+                        className: 'start-marker',
+                        html: `<div style="
+                            background: #10b981;
+                            color: white;
+                            border-radius: 50%;
+                            width: 30px;
+                            height: 30px;
+                            display: flex;
+                            align-items: center;
+                            justify-content: center;
+                            font-weight: bold;
+                            font-size: 10px;
+                            border: 2px solid white;
+                            box-shadow: 0 2px 8px rgba(16, 185, 129, 0.4);
+                        ">START</div>`,
+                        iconSize: [30, 30],
+                        iconAnchor: [15, 15]
+                    });
+
+                    const startMarker = L.marker([state.userLocation.lat, state.userLocation.lng], {
+                        icon: startIcon,
+                        title: 'Starting Point'
+                    }).addTo(map);
+                    startMarker.bindPopup('📍 Starting point');
+                    routeMarkers.push(startMarker);
+                }
+
+                if (allCoords.length > 1) {
+                    const bounds = L.latLngBounds(allCoords);
+                    map.fitBounds(bounds, {
+                        padding: [50, 50],
+                        maxZoom: 13,
+                        animate: true,
+                        duration: 1
+                    });
+                }
+            }
+
+            // ============================================================
+            // 13. DELIVERY COMPLETION
+            // ============================================================
+            async function completeDelivery(stopId) {
+                const stop = state.stops.find(s => s.id === stopId);
+                if (!stop || stop.status === 'Completed') return;
+
+                stop.status = 'Completed';
+                stop.completedAt = new Date();
+
+                const routeIndex = state.optimizedRoute.indexOf(stopId);
+                if (routeIndex !== -1) {
+                    state.optimizedRoute.splice(routeIndex, 1);
+                    state.routeSegments.splice(routeIndex, 1);
+                }
+
+                if (stop.marker) {
+                    map.removeLayer(stop.marker);
+                    const position = L.latLng(stop.lat, stop.lng);
+                    const greenIcon = L.icon({
+                        iconUrl: 'https://unpkg.com/leaflet@1.9.4/dist/images/marker-icon.png',
+                        shadowUrl: 'https://unpkg.com/leaflet@1.9.4/dist/images/marker-shadow.png',
+                        iconSize: [25, 41],
+                        iconAnchor: [12, 41],
+                        popupAnchor: [1, -34],
+                        shadowSize: [41, 41]
+                    });
+                    const newMarker = L.marker(position, {
+                        icon: greenIcon,
+                        title: `${stop.name} (Completed)`,
+                        riseOnHover: true
+                    }).addTo(map);
+                    newMarker.bindPopup(`<strong>${escapeHtml(stop.name)}</strong><br>✅ Completed`);
+                    L.circle(position, {
+                        color: '#10b981',
+                        fillColor: '#10b981',
+                        fillOpacity: 0.2,
+                        radius: 30,
+                        weight: 2
+                    }).addTo(map);
+                    stop.marker = newMarker;
+                }
+
+                state.totalDistance = state.routeSegments.reduce((sum, seg) => sum + seg.distance, 0);
+                state.totalDuration = state.routeSegments.reduce((sum, seg) => sum + seg.duration, 0);
+
+                renderStops();
+                updateInfoPanel();
+                showToast(`✅ Completed "${stop.name}"`, 'success');
+
+                const pending = state.stops.filter(s => s.status === 'Pending');
+                if (pending.length >= 2) {
+                    setStatusMessage(`Completed "${stop.name}". Recalculating route...`);
+                    await optimizeRoute();
+                } else if (pending.length === 1) {
+                    clearRouteVisualization();
+                    const remaining = pending[0];
+                    if (state.userLocation) {
+                        const mode = state.travelMode;
+                        try {
+                            const route = await fetchOSRMRoute(
+                                state.userLocation.lat, state.userLocation.lng,
+                                remaining.lat, remaining.lng,
+                                mode
+                            );
+                            state.routeSegments = [{
+                                from: state.userLocation,
+                                to: remaining,
+                                distance: route.distance,
+                                duration: route.duration,
+                                geometry: route.geometry
+                            }];
+                            state.totalDistance = route.distance;
+                            state.totalDuration = route.duration;
+                            remaining.distanceFromPrevious = route.distance;
+                            remaining.durationFromPrevious = route.duration;
+                            remaining.optimizedOrder = 1;
+                            drawRouteVisualization();
+                            updateInfoPanel();
+                        } catch (error) {
+                            console.error('Failed to fetch route:', error);
+                            showToast('Error fetching route', 'error');
+                        }
+                    }
+                    showToast(`One store remaining: ${remaining.name}`, 'warning');
+                    saveState();
+                } else {
+                    clearRouteVisualization();
+                    state.routeSegments = [];
+                    state.totalDistance = 0;
+                    state.totalDuration = 0;
+                    updateInfoPanel();
+                    showToast('🎉 All deliveries completed! Great job!', 'success');
+                    setStatusMessage('All deliveries completed! 🎉');
+                    saveState();
+                }
+
+                updateOptimizeButton();
+                updateNavigationButtons();
+                saveState();
+            }
+
+            // ============================================================
+            // 14. GOOGLE MAPS NAVIGATION
+            // ============================================================
+            function getTravelModeParam() {
+                return state.travelMode === 'driving' ? 'driving' : 'cycling';
+            }
+
+            function navigateToNext() {
+                if (!state.userLocation) {
+                    showToast('Please enable location access first', 'warning');
+                    return;
+                }
+
+                const pending = state.stops.filter(s => s.status === 'Pending');
+                if (pending.length === 0) {
+                    showToast('No pending deliveries', 'warning');
+                    return;
+                }
+
+                let nextStop = null;
+                if (state.optimizedRoute.length > 0) {
+                    const nextId = state.optimizedRoute[0];
+                    nextStop = state.stops.find(s => s.id === nextId);
+                }
+                if (!nextStop || nextStop.status === 'Completed') {
+                    nextStop = pending[0];
+                }
+
+                if (!nextStop) {
+                    showToast('No next destination found', 'warning');
+                    return;
+                }
+
+                const mode = getTravelModeParam();
+                const url = `https://www.google.com/maps/dir/?api=1&origin=${state.userLocation.lat},${state.userLocation.lng}&destination=${nextStop.lat},${nextStop.lng}&travelmode=${mode}`;
+                window.open(url, '_blank');
+                showToast(`🌍 Opening Google Maps to ${nextStop.name}`, 'info');
+            }
+
+            function navigateFullRoute() {
+                if (!state.userLocation) {
+                    showToast('Please enable location access first', 'warning');
+                    return;
+                }
+
+                const pending = state.stops.filter(s => s.status === 'Pending');
+                if (pending.length === 0) {
+                    showToast('No pending deliveries', 'warning');
+                    return;
+                }
+
+                let orderedStops = [];
+                if (state.optimizedRoute.length > 0) {
+                    orderedStops = state.optimizedRoute
+                        .map(id => state.stops.find(s => s.id === id))
+                        .filter(s => s && s.status === 'Pending');
+                }
+                if (orderedStops.length === 0) {
+                    orderedStops = pending;
+                }
+
+                if (orderedStops.length === 0) {
+                    showToast('No pending deliveries', 'warning');
+                    return;
+                }
+
+                const mode = getTravelModeParam();
+                
+                let url = `https://www.google.com/maps/dir/?api=1`;
+                url += `&origin=${state.userLocation.lat},${state.userLocation.lng}`;
+                
+                const waypoints = orderedStops.slice(0, -1);
+                const destination = orderedStops[orderedStops.length - 1];
+                
+                if (waypoints.length > 0) {
+                    const maxWaypoints = 10;
+                    const waypointStops = waypoints.slice(0, maxWaypoints);
+                    
+                    const waypointStr = waypointStops.map(stop => 
+                        `${stop.lat},${stop.lng}`
+                    ).join('|');
+                    
+                    url += `&waypoints=${waypointStr}`;
+                }
+                
+                url += `&destination=${destination.lat},${destination.lng}`;
+                url += `&travelmode=${mode}`;
+
+                window.open(url, '_blank');
+                showToast(`🌍 Opening full route in Google Maps (${orderedStops.length} stops)`, 'info');
+            }
+
+            // ============================================================
+            // 15. STOPS MANAGEMENT
+            // ============================================================
+            function addDeliveryStop(name, lat, lng, storeId = null) {
+                const stop = {
+                    id: storeId || state.nextId++,
+                    name: name.trim(),
+                    lat,
+                    lng,
+                    status: 'Pending',
+                    distance: '--',
+                    optimizedOrder: undefined,
+                    distanceFromPrevious: undefined,
+                    durationFromPrevious: undefined,
+                    completedAt: null,
+                    marker: null
+                };
+                state.stops.push(stop);
+                renderStops();
+                updateInfoPanel();
+                addMarkerToMap(stop);
+                updateOptimizeButton();
+                updateNavigationButtons();
+                saveState();
+                return stop;
+            }
+
+            function removeStop(stopId) {
+                const index = state.stops.findIndex(s => s.id === stopId);
+                if (index === -1) return;
+
+                const stop = state.stops[index];
+
+                const card = document.querySelector(`.stop-card[data-id="${stopId}"]`);
+                if (card) card.classList.add('removing');
+
+                setTimeout(() => {
+                    if (stop.marker) map.removeLayer(stop.marker);
+                    state.stops.splice(index, 1);
+
+                    const routeIndex = state.optimizedRoute.indexOf(stopId);
+                    if (routeIndex !== -1) {
+                        state.optimizedRoute.splice(routeIndex, 1);
+                        state.routeSegments.splice(routeIndex, 1);
+                        state.totalDistance = state.routeSegments.reduce((sum, seg) => sum + seg.distance, 0);
+                        state.totalDuration = state.routeSegments.reduce((sum, seg) => sum + seg.duration, 0);
+                        state.optimizedRoute.forEach((id, idx) => {
+                            const s = state.stops.find(st => st.id === id);
+                            if (s) {
+                                s.optimizedOrder = idx + 1;
+                                s.distanceFromPrevious = state.routeSegments[idx]?.distance || 0;
+                                s.durationFromPrevious = state.routeSegments[idx]?.duration || 0;
+                            }
+                        });
+                    }
+
+                    if (state.optimizedRoute.length > 0) {
+                        drawRouteVisualization();
+                    } else {
+                        clearRouteVisualization();
+                    }
+
+                    renderStops();
+                    updateInfoPanel();
+                    updateOptimizeButton();
+                    updateNavigationButtons();
+                    fitMapToAllLocations();
+                    showToast(`🗑️ Removed "${stop.name}"`, 'warning');
+                    setStatusMessage(`Removed "${stop.name}"`);
+                    saveState();
+                }, 300);
+            }
+
+            function resetStops() {
+                if (state.stops.length === 0) {
+                    showToast('No stores to reset', 'warning');
+                    return;
+                }
+
+                if (!confirm('Remove all delivery stops and generate new ones?')) return;
+
+                // Clear localStorage and sessionStorage
+                clearSavedState();
+                sessionStorage.removeItem('deliveryStores');
+
+                state.stops.forEach(stop => {
+                    if (stop.marker) map.removeLayer(stop.marker);
+                });
+                clearRouteVisualization();
+
+                state.stops = [];
+                state.nextId = 1;
+                state.optimizedRoute = [];
+                state.routeSegments = [];
+                state.totalDistance = 0;
+                state.totalDuration = 0;
+
+                renderStops();
+                updateInfoPanel();
+                updateOptimizeButton();
+                updateNavigationButtons();
+
+                // Generate new random selection
+                showToast('🔄 Generating new stores...', 'info');
+                setTimeout(() => {
+                    selectRandomStores();
+                    saveState();
+                }, 300);
+            }
+
+            // ============================================================
+            // 16. MARKERS
+            // ============================================================
+            function addMarkerToMap(stop) {
+                if (!map) return;
+                const position = L.latLng(stop.lat, stop.lng);
+                const marker = L.marker(position, {
+                    title: stop.name,
+                    riseOnHover: true
+                }).addTo(map);
+                marker.bindPopup(`
+                    <strong>${escapeHtml(stop.name)}</strong><br>
+                    Status: ${stop.status}
+                `);
+                stop.marker = marker;
+            }
+
+            // ============================================================
+            // 17. UI RENDERING
+            // ============================================================
+            function renderStops() {
+                if (state.stops.length === 0) {
+                    DOM.stopsList.innerHTML = `
+                        <div style="text-align: center; padding: 30px 20px; color: #94a3b8; font-size: 0.95rem;">
+                            <i class="fas fa-store" style="font-size: 2.5rem; display: block; margin-bottom: 12px; opacity: 0.3;"></i>
+                            No stores loaded.<br>Refreshing...
+                        </div>
+                    `;
+                } else {
+                    const sorted = [...state.stops].sort((a, b) => {
+                        if (a.status === 'Completed' && b.status !== 'Completed') return 1;
+                        if (a.status !== 'Completed' && b.status === 'Completed') return -1;
+                        if (a.optimizedOrder !== undefined && b.optimizedOrder !== undefined) {
+                            return a.optimizedOrder - b.optimizedOrder;
+                        }
+                        if (a.optimizedOrder !== undefined) return -1;
+                        if (b.optimizedOrder !== undefined) return 1;
+                        return a.name.localeCompare(b.name);
+                    });
+
+                    DOM.stopsList.innerHTML = sorted.map(stop => {
+                        const isOptimized = stop.optimizedOrder !== undefined && stop.status === 'Pending';
+                        const isCompleted = stop.status === 'Completed';
+
+                        let distDisplay = '--';
+                        let durationDisplay = '';
+                        if (stop.distanceFromPrevious !== undefined && stop.distanceFromPrevious > 0) {
+                            distDisplay = `${Math.round(stop.distanceFromPrevious * 100) / 100} km`;
+                            if (stop.durationFromPrevious !== undefined) {
+                                durationDisplay = ` · ${Math.round(stop.durationFromPrevious)} min`;
+                            }
+                        }
+
+                        let statusClass = 'pending';
+                        let statusIcon = 'fa-clock';
+                        let statusText = 'Pending';
+
+                        if (isCompleted) {
+                            statusClass = 'completed';
+                            statusIcon = 'fa-check-circle';
+                            statusText = 'Completed';
+                        } else if (isOptimized) {
+                            statusClass = 'optimized';
+                            statusIcon = 'fa-route';
+                            statusText = `#${stop.optimizedOrder}`;
+                        }
+
+                        const orderBadge = isOptimized ? `<span class="stop-order">#${stop.optimizedOrder}</span>` : '';
+                        const cardClass = isCompleted ? 'completed' : (isOptimized ? 'optimized' : '');
+
+                        const completeBtn = !isCompleted
+                            ? `<button class="btn-complete" onclick="window.completeDelivery(${stop.id})">
+                                <i class="fas fa-check"></i> Complete
+                               </button>`
+                            : `<span style="color: #10b981; font-size: 0.8rem; font-weight: 600;">
+                                <i class="fas fa-check-circle"></i> Done
+                               </span>`;
+
+                        return `
+                            <div class="stop-card ${cardClass}" data-id="${stop.id}">
+                                <div class="stop-info">
+                                    <span class="stop-name">${orderBadge} ${escapeHtml(stop.name)}</span>
+                                    <div class="stop-meta">
+                                        <span class="status ${statusClass}">
+                                            <i class="fas ${statusIcon}"></i>
+                                            ${statusText}
+                                        </span>
+                                        <span class="distance"><i class="fas fa-road"></i> ${distDisplay}${durationDisplay}</span>
+                                        <span class="stop-coords">📍 ${stop.lat.toFixed(4)}, ${stop.lng.toFixed(4)}</span>
+                                    </div>
+                                </div>
+                                <div class="stop-actions">
+                                    ${completeBtn}
+                                    <div class="stop-icon" onclick="window.removeStop(${stop.id})" title="Remove stop">
+                                        <i class="fas fa-times-circle"></i>
+                                    </div>
+                                </div>
+                            </div>
+                        `;
+                    }).join('');
+                }
+
+                DOM.stopCount.textContent = `(${state.stops.length})`;
+            }
+
+            function updateInfoPanel() {
+                const pending = state.stops.filter(s => s.status === 'Pending');
+                const completed = state.stops.filter(s => s.status === 'Completed');
+
+                DOM.remainingStops.textContent = pending.length;
+                DOM.completedDeliveries.textContent = completed.length;
+
+                if (pending.length === 0) {
+                    DOM.nextDestination.textContent = 'All completed! 🎉';
+                } else if (state.optimizedRoute.length > 0) {
+                    const firstId = state.optimizedRoute[0];
+                    const firstStop = state.stops.find(s => s.id === firstId);
+                    DOM.nextDestination.textContent = firstStop?.status === 'Pending' ? firstStop.name : pending[0]?.name || 'None';
+                } else {
+                    DOM.nextDestination.textContent = pending[0]?.name || 'None';
+                }
+
+                if (state.totalDistance > 0) {
+                    const totalDistKm = Math.round(state.totalDistance * 100) / 100;
+                    const totalMins = Math.round(state.totalDuration);
+                    DOM.totalDistance.innerHTML = `${totalDistKm} <small>km</small>`;
+                    DOM.estimatedTime.innerHTML = `${totalMins} <small>mins</small>`;
+                } else {
+                    DOM.totalDistance.innerHTML = `0 <small>km</small>`;
+                    DOM.estimatedTime.innerHTML = `0 <small>mins</small>`;
+                }
+            }
+
+            function updateOptimizeButton() {
+                const pending = state.stops.filter(s => s.status === 'Pending');
+                DOM.optimizeBtn.disabled = pending.length < 2 || !state.userLocation;
+            }
+
+            function updateNavigationButtons() {
+                const pending = state.stops.filter(s => s.status === 'Pending');
+                DOM.navigateNext.disabled = pending.length === 0 || !state.userLocation;
+                DOM.navigateFull.disabled = pending.length === 0 || !state.userLocation;
+            }
+
+            function setStatusMessage(msg) {
+                DOM.statusMessage.innerHTML = `<i class="fas fa-info-circle"></i> ${msg}`;
+            }
+
+            // ============================================================
+            // 18. EXCEL EXPORT
+            // ============================================================
+            function exportToExcel() {
+                try {
+                    if (typeof XLSX === 'undefined') {
+                        showToast('⚠️ Excel export library not loaded. Please check your internet connection.', 'error');
+                        return;
+                    }
+
+                    const pendingStops = state.stops.filter(s => s.status === 'Pending');
+                    const completedStops = state.stops.filter(s => s.status === 'Completed');
+
+                    const rows = [];
+
+                    rows.push(['Smart Delivery Route Optimizer', '', '', '', '', '', '', '', '', '']);
+                    rows.push(['Generated On', new Date().toLocaleString(), '', '', '', '', '', '', '', '']);
+                    rows.push(['Travel Mode', state.travelMode.charAt(0).toUpperCase() + state.travelMode.slice(1), '', '', '', '', '', '', '', '']);
+                    rows.push(['Total Stops', state.stops.length, '', '', '', '', '', '', '', '']);
+                    rows.push(['Completed Deliveries', completedStops.length, '', '', '', '', '', '', '', '']);
+                    rows.push(['Remaining Deliveries', pendingStops.length, '', '', '', '', '', '', '', '']);
+                    rows.push(['Total Route Distance (km)', state.totalDistance ? state.totalDistance.toFixed(2) : '0.00', '', '', '', '', '', '', '', '']);
+                    rows.push(['Estimated Total Time (minutes)', state.totalDuration ? Math.round(state.totalDuration) : '0', '', '', '', '', '', '', '', '']);
+                    rows.push(['', '', '', '', '', '', '', '', '', '']);
+
+                    rows.push([
+                        'Store ID',
+                        'Store Name',
+                        'Latitude',
+                        'Longitude',
+                        'Status',
+                        'Optimized Order',
+                        'Distance From Previous Stop (km)',
+                        'Estimated Time (minutes)',
+                        'Completed (Yes/No)',
+                        'Completed Time'
+                    ]);
+
+                    const sortedStops = [...state.stops].sort((a, b) => {
+                        if (a.optimizedOrder !== undefined && b.optimizedOrder !== undefined) {
+                            return a.optimizedOrder - b.optimizedOrder;
+                        }
+                        if (a.optimizedOrder !== undefined) return -1;
+                        if (b.optimizedOrder !== undefined) return 1;
+                        return a.name.localeCompare(b.name);
+                    });
+
+                    sortedStops.forEach(stop => {
+                        const isCompleted = stop.status === 'Completed';
+                        rows.push([
+                            stop.id || '',
+                            stop.name || '',
+                            stop.lat ? stop.lat.toFixed(6) : '',
+                            stop.lng ? stop.lng.toFixed(6) : '',
+                            stop.status || 'Pending',
+                            stop.optimizedOrder || '',
+                            stop.distanceFromPrevious !== undefined ? stop.distanceFromPrevious.toFixed(2) : '',
+                            stop.durationFromPrevious !== undefined ? Math.round(stop.durationFromPrevious) : '',
+                            isCompleted ? 'Yes' : 'No',
+                            stop.completedAt ? stop.completedAt.toLocaleString() : ''
+                        ]);
+                    });
+
+                    const wb = XLSX.utils.book_new();
+                    const ws = XLSX.utils.aoa_to_sheet(rows);
+
+                    ws['!cols'] = [
+                        { wch: 12 },
+                        { wch: 30 },
+                        { wch: 18 },
+                        { wch: 18 },
+                        { wch: 14 },
+                        { wch: 18 },
+                        { wch: 30 },
+                        { wch: 25 },
+                        { wch: 20 },
+                        { wch: 25 }
+                    ];
+
+                    const headerRow = 9;
+                    if (rows[headerRow]) {
+                        for (let col = 0; col < rows[headerRow].length; col++) {
+                            const cellRef = XLSX.utils.encode_cell({ r: headerRow, c: col });
+                            if (!ws[cellRef]) continue;
+                            ws[cellRef].s = {
+                                font: { bold: true },
+                                alignment: { horizontal: 'center', vertical: 'center' },
+                                fill: { fgColor: { rgb: "4472C4" } }
+                            };
+                        }
+                    }
+
+                    wb.SheetNames.push('Delivery Report');
+                    wb.Sheets['Delivery Report'] = ws;
+
+                    const now = new Date();
+                    const timestamp = now.getFullYear() +
+                        String(now.getMonth() + 1).padStart(2, '0') +
+                        String(now.getDate()).padStart(2, '0') + '_' +
+                        String(now.getHours()).padStart(2, '0') + '-' +
+                        String(now.getMinutes()).padStart(2, '0');
+                    const fileName = `Delivery_Report_${timestamp}.xlsx`;
+
+                    XLSX.writeFile(wb, fileName);
+                    showToast(`✅ Report exported successfully as ${fileName}`, 'success');
+                } catch (error) {
+                    console.error('Export error:', error);
+                    showToast('Error exporting report: ' + error.message, 'error');
+                }
+            }
+
+            // ============================================================
+            // 19. TOAST NOTIFICATIONS
+            // ============================================================
+            function showToast(message, type = 'info', duration = 4000) {
+                const icons = {
+                    success: 'fa-check-circle',
+                    error: 'fa-exclamation-circle',
+                    warning: 'fa-exclamation-triangle',
+                    info: 'fa-info-circle',
+                    restore: 'fa-history'
+                };
+
+                const toast = document.createElement('div');
+                toast.className = `toast ${type}`;
+                toast.innerHTML = `
+                    <i class="fas ${icons[type] || icons.info}"></i>
+                    <span class="toast-message">${escapeHtml(message)}</span>
+                    <button class="toast-close"><i class="fas fa-times"></i></button>
+                `;
+
+                const closeBtn = toast.querySelector('.toast-close');
+                closeBtn.addEventListener('click', () => hideToast(toast));
+
+                DOM.toastContainer.appendChild(toast);
+
+                setTimeout(() => hideToast(toast), duration);
+                return toast;
+            }
+
+            function hideToast(toast) {
+                if (toast.classList.contains('hiding')) return;
+                toast.classList.add('hiding');
+                setTimeout(() => {
+                    if (toast.parentNode) toast.parentNode.removeChild(toast);
+                }, 300);
+            }
+
+            // ============================================================
+            // 20. LOADING SPINNER
+            // ============================================================
+            function showSpinner(show) {
+                DOM.spinner.classList.toggle('active', show);
+            }
+
+            // ============================================================
+            // 21. MAP CLICK HANDLER
+            // ============================================================
+            function handleMapClick(e) {
+                if (!state.isAddingStore) return;
+
+                const { lat, lng } = e.latlng;
+                const name = state.pendingStoreName || `Store ${state.stops.length + 1}`;
+                addDeliveryStop(name, lat, lng);
+
+                state.isAddingStore = false;
+                DOM.addStoreBtn.disabled = false;
+                DOM.addStoreBtn.innerHTML = '<i class="fas fa-plus-circle"></i> Add Store';
+                setStatusMessage('Click "Add Store" to add another location');
+                showToast('📍 Store added successfully', 'success');
+                fitMapToAllLocations();
+                saveState();
+            }
+
+            // ============================================================
+            // 22. UTILITY FUNCTIONS
+            // ============================================================
+            function escapeHtml(text) {
+                const div = document.createElement('div');
+                div.textContent = text;
+                return div.innerHTML;
+            }
+
+            function haversineDistance(lat1, lon1, lat2, lon2) {
+                const R = 6371;
+                const dLat = (lat2 - lat1) * Math.PI / 180;
+                const dLon = (lon2 - lon1) * Math.PI / 180;
+                const a = Math.sin(dLat / 2) ** 2 +
+                          Math.cos(lat1 * Math.PI / 180) * Math.cos(lat2 * Math.PI / 180) *
+                          Math.sin(dLon / 2) ** 2;
+                const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
+                return R * c;
+            }
+
+            // ============================================================
+            // 23. EXPOSE FUNCTIONS TO WINDOW
+            // ============================================================
+            window.completeDelivery = completeDelivery;
+            window.removeStop = removeStop;
+
+            // ============================================================
+            // 24. EVENT LISTENERS
+            // ============================================================
+            DOM.addStoreBtn.addEventListener('click', function() {
+                const name = prompt('Enter store name:', `Store ${state.stops.length + 1}`);
+                if (name === null) return;
+
+                const trimmed = name.trim();
+                if (!trimmed) {
+                    showToast('Store name cannot be empty', 'warning');
+                    return;
+                }
+
+                state.isAddingStore = true;
+                state.pendingStoreName = trimmed;
+                this.disabled = true;
+                this.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Click on map...';
+                setStatusMessage(`📍 Click on the map to place "${trimmed}"`);
+                showToast(`Click on the map to place "${trimmed}"`, 'info');
+            });
+
+            DOM.resetBtn.addEventListener('click', resetStops);
+
+            DOM.optimizeBtn.addEventListener('click', function() {
+                if (!state.userLocation) {
+                    showToast('Please allow location access first', 'warning');
+                    return;
+                }
+                const pending = state.stops.filter(s => s.status === 'Pending');
+                if (pending.length < 2) {
+                    showToast('Need at least 2 pending stores to optimize', 'warning');
+                    return;
+                }
+                optimizeRoute();
+            });
+
+            DOM.exportReportBtn.addEventListener('click', function() {
+                if (state.stops.length === 0) {
+                    showToast('No stops to export', 'warning');
+                    return;
+                }
+                exportToExcel();
+            });
+
+            DOM.navigateNext.addEventListener('click', navigateToNext);
+            DOM.navigateFull.addEventListener('click', navigateFullRoute);
+
+            DOM.travelMode.addEventListener('change', function() {
+                state.travelMode = this.value;
+                if (state.optimizedRoute.length > 0) {
+                    const pending = state.stops.filter(s => s.status === 'Pending');
+                    if (pending.length >= 2) {
+                        showToast(`Switched to ${this.value}. Recalculating route...`, 'info');
+                        optimizeRoute();
+                    }
+                }
+                saveState();
+            });
+
+            // ============================================================
+            // 25. INITIALIZATION
+            // ============================================================
+            async function initialize() {
+                // Initialize map first
+                initMap();
+
+                // Load master stores from JSON (will also handle restoration)
+                await loadMasterStores();
+
+                // Request location if not restored
+                setTimeout(requestGeolocation, 400);
+
+                setTimeout(() => {
+                    if (map) map.invalidateSize();
+                }, 800);
+
+                console.log('🚀 Smart Delivery Route Optimizer initialized with persistence');
+                console.log(`💾 Storage key: ${STORAGE_KEY}`);
+                console.log(`📦 Store dataset loaded: ${state.storesLoaded ? '✅ Yes' : '⚠️ Using fallback'}`);
+            }
+
+            // Start when DOM is ready
+            if (document.readyState === 'loading') {
+                document.addEventListener('DOMContentLoaded', initialize);
+            } else {
+                initialize();
+            }
+
+        })();
+    </script>
+</body>
+</html>
